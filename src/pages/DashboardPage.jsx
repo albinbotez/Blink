@@ -5,12 +5,11 @@ import { Icons } from '../components/Icons'
 import { formatFollowers } from '../lib/utils'
 
 export default function DashboardPage() {
-  const { user, profile, userType, updateProfile, uploadAvatar, loading } = useAuth()
+  const { user, profile, userType, updateProfile, uploadAvatar } = useAuth()
   const [editing, setEditing] = useState(false)
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({})
 
-  // Don't block on loading forever — show dashboard even with empty profile
   const p = profile || {}
 
   const startEditing = () => {
@@ -71,7 +70,6 @@ export default function DashboardPage() {
         </Button>
       </div>
 
-      {/* Stats overview */}
       <div className="animate-fade-in grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
         <StatCard icon={<Icons.Users />} label="Følgere" value={formatFollowers(p.followers || 0)} />
         <StatCard icon={<Icons.Heart />} label="Engasjement" value={`${p.engagement_rate || 0}%`} color="#10b981" />
@@ -79,7 +77,6 @@ export default function DashboardPage() {
         <StatCard icon={<Icons.Eye />} label="Profil-visninger" value="–" color="#3b82f6" />
       </div>
 
-      {/* Profile card */}
       <div className="animate-fade-in bg-bg-card border border-white/[0.06] rounded-[18px] p-8">
         <div className="flex items-center gap-5 mb-7">
           <div className="relative group">
@@ -113,9 +110,7 @@ export default function DashboardPage() {
               <Input label="By" value={form.city} onChange={e => u('city', e.target.value)} />
               <Input label="Land" value={form.country} onChange={e => u('country', e.target.value)} />
             </div>
-            <Button variant="ghost" onClick={() => setEditing(false)} className="self-start mt-2">
-              Avbryt
-            </Button>
+            <Button variant="ghost" onClick={() => setEditing(false)} className="self-start mt-2">Avbryt</Button>
           </div>
         ) : (
           <div>
