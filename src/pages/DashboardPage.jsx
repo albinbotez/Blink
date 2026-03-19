@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../hooks/useAuth'
-import { Avatar, Badge, Button, Input, Textarea, StatCard, Spinner } from '../components/ui'
+import { Avatar, Badge, Button, Input, Textarea, StatCard } from '../components/ui'
 import { Icons } from '../components/Icons'
 import { formatFollowers } from '../lib/utils'
 
@@ -10,24 +10,19 @@ export default function DashboardPage() {
   const [saving, setSaving] = useState(false)
   const [form, setForm] = useState({})
 
-  if (loading || !profile) {
-    return (
-      <div className="flex items-center justify-center py-32 text-txt-muted">
-        <Spinner /> <span className="ml-3">Laster dashboard...</span>
-      </div>
-    )
-  }
+  // Don't block on loading forever — show dashboard even with empty profile
+  const p = profile || {}
 
   const startEditing = () => {
     setForm({
-      name: profile.name || '',
-      bio: profile.bio || '',
-      instagram_username: profile.instagram_username || '',
-      followers: profile.followers?.toString() || '',
-      engagement_rate: profile.engagement_rate?.toString() || '',
-      age: profile.age?.toString() || '',
-      city: profile.city || '',
-      country: profile.country || '',
+      name: p.name || '',
+      bio: p.bio || '',
+      instagram_username: p.instagram_username || '',
+      followers: p.followers?.toString() || '0',
+      engagement_rate: p.engagement_rate?.toString() || '0',
+      age: p.age?.toString() || '',
+      city: p.city || '',
+      country: p.country || '',
     })
     setEditing(true)
   }
@@ -39,9 +34,9 @@ export default function DashboardPage() {
         name: form.name,
         bio: form.bio,
         instagram_username: form.instagram_username,
-        followers: parseInt(form.followers) || profile.followers,
-        engagement_rate: parseFloat(form.engagement_rate) || profile.engagement_rate,
-        age: parseInt(form.age) || profile.age,
+        followers: parseInt(form.followers) || 0,
+        engagement_rate: parseFloat(form.engagement_rate) || 0,
+        age: parseInt(form.age) || null,
         city: form.city,
         country: form.country,
       })
@@ -56,15 +51,11 @@ export default function DashboardPage() {
   const handleAvatarUpload = async (e) => {
     const file = e.target.files?.[0]
     if (file) {
-      try {
-        await uploadAvatar(file)
-      } catch (err) {
-        console.error('Upload error:', err)
-      }
+      try { await uploadAvatar(file) } catch (err) { console.error('Upload error:', err) }
     }
   }
 
-  const u = (key, val) => setForm(p => ({ ...p, [key]: val }))
+  const u = (key, val) => setForm(prev => ({ ...prev, [key]: val }))
 
   return (
     <div className="max-w-[900px] mx-auto px-6 py-8">
@@ -82,9 +73,9 @@ export default function DashboardPage() {
 
       {/* Stats overview */}
       <div className="animate-fade-in grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
-        <StatCard icon={<Icons.Users />} label="Følgere" value={formatFollowers(profile.followers)} />
-        <StatCard icon={<Icons.Heart />} label="Engasjement" value={`${profile.engagement_rate}%`} color="#10b981" />
-        <StatCard icon={<Icons.Mail />} label="Meldinger" value="–" color="#ec4899" />
+        <StatCard icon={<Icons.Users />} label="Følgere" value={formatFollowers(p.followers || 0)} />
+        <StatCard icon={<Icons.Heart />} label="Engasjement" value={`${p.engagement_rate || 0}%`} color="#10b981" />
+        <StatCard icon={<Icons.Mail />} label="Meldinger" value="0" color="#ec4899" />
         <StatCard icon={<Icons.Eye />} label="Profil-visninger" value="–" color="#3b82f6" />
       </div>
 
@@ -92,16 +83,16 @@ export default function DashboardPage() {
       <div className="animate-fade-in bg-bg-card border border-white/[0.06] rounded-[18px] p-8">
         <div className="flex items-center gap-5 mb-7">
           <div className="relative group">
-            <Avatar name={profile.name} size={72} src={profile.avatar_url} />
+            <Avatar name={p.name || user?.email || 'Bruker'} size={72} src={p.avatar_url} />
             <label className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
               <Icons.Camera />
               <input type="file" accept="image/*" className="hidden" onChange={handleAvatarUpload} />
             </label>
           </div>
           <div>
-            <h2 className="text-2xl font-display font-bold">{profile.name}</h2>
+            <h2 className="text-2xl font-display font-bold">{p.name || 'Ny bruker'}</h2>
             <p className="text-txt-muted text-sm">
-              {profile.instagram_username} · {profile.city}, {profile.country}
+              {p.instagram_username || '@brukernavn'} · {p.city || 'By'}, {p.country || 'Land'}
             </p>
           </div>
         </div>
@@ -129,12 +120,12 @@ export default function DashboardPage() {
         ) : (
           <div>
             <p className="text-txt-secondary leading-relaxed mb-5">
-              {profile.bio || 'Ingen bio lagt til ennå. Klikk "Rediger profil" for å legge til.'}
+              {p.bio || 'Ingen bio lagt til ennå. Klikk "Rediger profil" for å legge til.'}
             </p>
             <div className="flex flex-wrap gap-2">
-              <Badge>{profile.niche || 'Ingen kategori'}</Badge>
-              <Badge variant="green">{profile.engagement_rate}% engasjement</Badge>
-              <Badge variant="blue">{formatFollowers(profile.followers)} følgere</Badge>
+              <Badge>{p.niche || 'Ingen kategori'}</Badge>
+              <Badge variant="green">{p.engagement_rate || 0}% engasjement</Badge>
+              <Badge variant="blue">{formatFollowers(p.followers || 0)} følgere</Badge>
             </div>
           </div>
         )}
