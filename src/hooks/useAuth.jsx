@@ -4,25 +4,31 @@ import { supabase } from '../lib/supabase'
 const AuthContext = createContext(null)
 
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null)         // Supabase auth user
-  const [profile, setProfile] = useState(null)    // Profile or company data
-  const [userType, setUserType] = useState(null)  // 'influencer' or 'business'
+  const [user, setUser] = useState(null)
+  const [profile, setProfile] = useState(null)
+  const [userType, setUserType] = useState(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Get initial session
+    let mounted = true
+
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return
       if (session?.user) {
         setUser(session.user)
-        loadUserProfile(session.user.id)
+        loadUserProfile(session.user.id).finally(() => {
+          if (mounted) setLoading(false)
+        })
       } else {
         setLoading(false)
       }
+    }).catch(() => {
+      if (mounted) setLoading(false)
     })
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (_event, session) => {
+        if (!mounted) return
         if (session?.user) {
           setUser(session.user)
           await loadUserProfile(session.user.id)
@@ -30,74 +36,77 @@ export function AuthProvider({ children }) {
           setUser(null)
           setProfile(null)
           setUserType(null)
-          setLoading(false)
         }
+        if (mounted) setLoading(false)
       }
     )
 
-    return () => subscription.unsubscribe()
+    return () => {
+      mounted = false
+      subscription.unsubscribe()
+    }
   }, [])
 
   async function loadUserProfile(userId) {
     try {
-      // Get user type
-      const { data: typeData } = await supabase
+      const { data: typeData, error: typeError } = await supabase
         .from('user_types')
         .select('user_type')
         .eq('id', userId)
-        .single()
+        .maybeSingle()
 
-      if (typeData) {
-        setUserType(typeData.user_type)
+      if (typeError) {
+        console.error('Error loading user type:', typeError)
+        return
+      }
 
-        if (typeData.user_type === 'influencer') {
-          const { data: profileData } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', userId)
-            .single()
-          setProfile(profileData)
-        } else {
-          const { data: companyData } = await supabase
-            .from('companies')
-            .select('*')
-            .eq('id', userId)
-            .single()
-          setProfile(companyData)
-        }
+      if (!typeData) {
+        console.warn('No user_type found for user:', userId)
+        return
+      }
+
+      setUserType(typeData.user_type)
+
+      if (typeData.user_type === 'influencer') {
+        const { data: profileData } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle()
+        setProfile(profileData)
+      } else {
+        const { data: companyData } = await supabase
+          .from('companies')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle()
+        setProfile(companyData)
       }
     } catch (err) {
       console.error('Error loading profile:', err)
-    } finally {
-      setLoading(false)
     }
   }
 
-  // Sign up as influencer
   async function signUpInfluencer(email, password, profileData) {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-    })
+    const { data: authData, error: authError } = await supabase.auth.signUp({ email, password })
     if (authError) throw authError
 
     const userId = authData.user.id
 
-    // Set user type
-    await supabase.from('user_types').insert({ id: userId, user_type: 'influencer' })
+    const { error: typeErr } = await supabase.from('user_types').insert({ id: userId, user_type: 'influencer' })
+    if (typeErr) throw typeErr
 
-    // Create profile
     const { error: profileError } = await supabase.from('profiles').insert({
       id: userId,
-      name: profileData.name,
-      bio: profileData.bio,
-      instagram_username: profileData.instagram,
+      name: profileData.name || '',
+      bio: profileData.bio || '',
+      instagram_username: profileData.instagram || '',
       age: profileData.age ? parseInt(profileData.age) : null,
-      city: profileData.city,
-      country: profileData.country,
-      niche: profileData.niche,
-      followers: profileData.followers ? parseInt(profileData.followers) : 0,
-      engagement_rate: profileData.engagement_rate ? parseFloat(profileData.engagement_rate) : 0,
+      city: profileData.city || '',
+      country: profileData.country || '',
+      niche: profileData.niche || '',
+      followers: parseInt(profileData.followers) || 0,
+      engagement_rate: parseFloat(profileData.engagement_rate) || 0,
       audience_age_13_17: parseInt(profileData.age_13_17) || 0,
       audience_age_18_24: parseInt(profileData.age_18_24) || 0,
       audience_age_25_34: parseInt(profileData.age_25_34) || 0,
@@ -113,55 +122,49 @@ export function AuthProvider({ children }) {
     })
     if (profileError) throw profileError
 
+    setUser(authData.user)
     setUserType('influencer')
     await loadUserProfile(userId)
     return authData
   }
 
-  // Sign up as business
   async function signUpBusiness(email, password, companyData) {
-    const { data: authData, error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-    })
+    const { data: authData, error: authError } = await supabase.auth.signUp({ email, password })
     if (authError) throw authError
 
     const userId = authData.user.id
 
-    await supabase.from('user_types').insert({ id: userId, user_type: 'business' })
+    const { error: typeErr } = await supabase.from('user_types').insert({ id: userId, user_type: 'business' })
+    if (typeErr) throw typeErr
 
     const { error: companyError } = await supabase.from('companies').insert({
       id: userId,
-      company_name: companyData.company_name,
-      industry: companyData.industry,
-      description: companyData.description,
+      company_name: companyData.company_name || '',
+      industry: companyData.industry || '',
+      description: companyData.description || '',
     })
     if (companyError) throw companyError
 
+    setUser(authData.user)
     setUserType('business')
     await loadUserProfile(userId)
     return authData
   }
 
-  // Sign in
   async function signIn(email, password) {
-    const { data, error } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    })
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password })
     if (error) throw error
     return data
   }
 
-  // Sign out
   async function signOut() {
     await supabase.auth.signOut()
     setUser(null)
     setProfile(null)
     setUserType(null)
+    setLoading(false)
   }
 
-  // Update profile
   async function updateProfile(updates) {
     if (!user) return
     const table = userType === 'influencer' ? 'profiles' : 'companies'
@@ -176,7 +179,6 @@ export function AuthProvider({ children }) {
     return data
   }
 
-  // Upload avatar
   async function uploadAvatar(file) {
     if (!user) return
     const fileExt = file.name.split('.').pop()
@@ -197,16 +199,9 @@ export function AuthProvider({ children }) {
   }
 
   const value = {
-    user,
-    profile,
-    userType,
-    loading,
-    signUpInfluencer,
-    signUpBusiness,
-    signIn,
-    signOut,
-    updateProfile,
-    uploadAvatar,
+    user, profile, userType, loading,
+    signUpInfluencer, signUpBusiness, signIn, signOut,
+    updateProfile, uploadAvatar,
     refreshProfile: () => user && loadUserProfile(user.id),
   }
 
